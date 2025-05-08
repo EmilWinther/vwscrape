@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Draw Rectangle and Load Points from JSON</title>
+  <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css" />
+  <script src="https://js.arcgis.com/4.29/"></script>
+  <style>
+    html, body, #viewDiv {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="viewDiv"></div>
+  <script>
+    require([
+      "esri/Map",
+      "esri/views/MapView",
+      "esri/layers/GraphicsLayer",
+      "esri/widgets/Sketch",
+      "esri/geometry/Point",
+      "esri/Graphic",
+      "esri/geometry/support/webMercatorUtils"
+    ], (Map, MapView, GraphicsLayer, Sketch, Point, Graphic, webMercatorUtils) => {
+
+      const graphicsLayer = new GraphicsLayer();
+
+      const map = new Map({
+        basemap: "streets-navigation-vector",
+        layers: [graphicsLayer]
+      });
+
+      const view = new MapView({
+        container: "viewDiv",
+        map: map,
+        center: [-100, 40],
+        zoom: 4
+      });
+
+      const sketch = new Sketch({
+        layer: graphicsLayer,
+        view: view,
+        availableCreateTools: ["rectangle"],
+        creationMode: "update"
+      });
+
+      view.ui.add(sketch, "top-right");
+
+      sketch.on("create", function(event) {
+        if (event.state === "complete") {
+          const geom = event.graphic.geometry;
+          if (geom.type === "polygon") {
+            const extent = geom.extent;
+
+            const corners = [
+              webMercatorUtils.webMercatorToGeographic(new Point({ x: extent.xmin, y: extent.ymin })),
+              webMercatorUtils.webMercatorToGeographic(new Point({ x: extent.xmax, y: extent.ymin })),
+              webMercatorUtils.webMercatorToGeographic(new Point({ x: extent.xmin, y: extent.ymax })),
+              webMercatorUtils.webMercatorToGeographic(new Point({ x: extent.xmax, y: extent.ymax }))
+            ];
+
+            const cornerLabels = corners.map((pt, idx) =>
+              `Corner ${idx + 1}: Lat: ${pt.y.toFixed(5)}, Lon: ${pt.x.toFixed(5)}`
+            ).join("<br>");
+
+            const center = new Point({
+              x: (extent.xmin + extent.xmax) / 2,
+              y: (extent.ymin + extent.ymax) / 2,
+              spatialReference: extent.spatialReference
+            });
+
+            const geoCenter = webMercatorUtils.webMercatorToGeographic(center);
+
+            view.popup.open({
+              location: center,
+              title: "Rectangle Info",
+              content: `Center: Lat ${geoCenter.y.toFixed(5)}, Lon ${geoCenter.x.toFixed(5)}<br><br>${cornerLabels}`
+            });
+          }
+        }
+      });
+
+      // JSON data - could be fetched from file
+      const jsonData = [
+        { id: 1, name: "Point A", lat: 40.7128, lon: -74.0060 },
+        { id: 2, name: "Point B", lat: 34.0522, lon: -118.2437 }
+      ];
+
+      function drawPointsFromData(data) {
+        data.forEach(item => {
+          const point = {
+            type: "point",
+            latitude: item.lat,
+            longitude: item.lon
+          };
+
+          const symbol = {
+            type: "simple-marker",
+            style: "circle",
+            color: "red",
+            size: "8px"
+          };
+
+          const popupTemplate = {
+            title: item.name,
+            content: `Lat: ${item.lat}, Lon: ${item.lon}`
+          };
+
+          const graphic = new Graphic({
+            geometry: point,
+            symbol: symbol,
+            popupTemplate: popupTemplate
+          });
+
+          graphicsLayer.add(graphic);
+        });
+      }
+
+      // Draw the data
+      drawPointsFromData(jsonData);
+
+    });
+  </script>
+</body>
+</html>
